@@ -8,9 +8,30 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
-from app.core.security import create_access_token, create_refresh_token, hash_password
-from app.features.auth.schemas import RegisterRequest
+from app.core.security import create_access_token, create_refresh_token, hash_password, verify_password
+from app.features.auth.schemas import LoginRequest, RegisterRequest
 from app.models.user import User
+
+
+# Mantiene un costo de verificación comparable cuando el correo no existe.
+# Nunca representa una cuenta válida y no contiene credenciales de usuario.
+_DUMMY_PASSWORD_HASH = hash_password("agecare-nonexistent-account")
+
+
+async def login_user(db: AsyncSession, data: LoginRequest) -> tuple[User, str, str]:
+    """Valida credenciales y emite una sesión sin revelar si el correo existe."""
+    user = await db.scalar(select(User).where(User.email == data.email))
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_valid = verify_password(data.password, password_hash)
+
+    if user is None or not password_valid:
+        raise AppError(
+            status_code=401,
+            code="INVALID_CREDENTIALS",
+            message="Correo o contraseña incorrectos.",
+        )
+
+    return user, create_access_token(user.id), create_refresh_token(user.id)
 
 
 async def register_user(db: AsyncSession, data: RegisterRequest) -> tuple[User, str, str]:
