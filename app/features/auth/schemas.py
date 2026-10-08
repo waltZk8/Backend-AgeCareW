@@ -62,3 +62,14 @@ class RegisterResponse(BaseModel):
     role: RoleType | None = None
     access_token: str
     refresh_token: str
+
+
+class LoginRequest(BaseModel):
+    """Credenciales de POST /api/v1/auth/login."""
+
+    email: EmailStr
+    password: str = Field(min_length=1)
+
+
+class LoginResponse(RegisterResponse):
+    """Mismo contrato de sesión que el registro; role sigue siendo contextual."""

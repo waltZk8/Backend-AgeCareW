@@ -8,6 +8,11 @@ Todo el código de este entregable fue **efectivamente instalado, migrado contra
 PostgreSQL real y probado end-to-end** (registro, creación de paciente, membresías,
 errores 401/403/404/409/422/429) antes de entregarse — no es solo código de referencia.
 
+**Incremento posterior:** se añadió `POST /api/v1/auth/login` con pruebas HTTP
+usando una sesión de base de datos simulada. Ese endpoint aún no se ha probado
+contra PostgreSQL real en este incremento. La demo web de `AgeCare-Frontend-v1W/demo-web`
+utiliza acceso ficticio local y no consulta esta API.
+
 ## 1. Por qué esta estructura de carpetas
 
 El frontend Flutter organiza `lib/` en `core/` (infraestructura transversal: red, storage,
@@ -35,7 +40,7 @@ app/
 │   ├── auth/
 │   │   ├── schemas.py        # Pydantic: RegisterRequest / RegisterResponse
 │   │   ├── service.py         # lógica de negocio (crear usuario, hashear, emitir JWT)
-│   │   └── router.py          # POST /auth/register
+│   │   └── router.py          # POST /auth/register, POST /auth/login
 │   └── patients/
 │       ├── schemas.py
 │       ├── service.py
@@ -144,6 +149,19 @@ Respuesta (201):
 }
 ```
 
+### Iniciar sesión con una cuenta registrada
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"carlos@example.com","password":"clave1234"}'
+```
+
+Devuelve `user_id`, `email`, `role: null`, `access_token` y `refresh_token`,
+con el mismo contrato del registro. Una contraseña o un correo incorrecto
+devuelve `401 INVALID_CREDENTIALS` sin indicar cuál de los dos falló. El rol
+continúa siendo contextual a una membresía de paciente, no a la cuenta.
+
 ### Crear un paciente (requiere el access_token de arriba)
 
 ```bash
@@ -203,10 +221,9 @@ global de errores. Además se agregó `GET /patients/{id}`, no pedido explícita
 Quedan **fuera de alcance**, y son los siguientes pasos naturales según el Plan de
 Desarrollo (equivalen a los tickets AGE-104 y AGE-201/202 de Sprint 1-2):
 
-- `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, recuperación de
-  contraseña. Esto requiere la tabla `refresh_tokens` (rotación y revocación del lado del
-  servidor) — no incluida porque el enunciado de este hito pidió explícitamente solo
-  Usuarios, Pacientes y Membresías.
+- `POST /auth/refresh`, `POST /auth/logout` y recuperación de contraseña.
+  Refresh/logout seguros requieren la tabla `refresh_tokens` para rotación y
+  revocación del lado del servidor. No se presentan como implementados.
 - Endpoints de invitaciones (`POST /patients/{id}/invitations`, `POST
   /invitations/accept`): por eso `POST /auth/register` responde `400
   FEATURE_NOT_AVAILABLE` si se envía `invitation_token` — se rechaza explícitamente en
@@ -217,7 +234,7 @@ Desarrollo (equivalen a los tickets AGE-104 y AGE-201/202 de Sprint 1-2):
 ### Limitaciones conocidas a tener en cuenta
 
 - **Rate limiting (`app/core/rate_limit.py`)**: es un limitador en memoria, por proceso,
-  aplicado solo a `POST /auth/register` como demostración de que el formato 429 funciona.
+  aplicado a registro y login como demostración de que el formato 429 funciona.
   No sirve con más de una instancia del backend corriendo (cada una tendría su propio
   contador) ni sobrevive un reinicio. Para producción, usar Azure API Management o un
   limitador respaldado por Redis (`slowapi`, `fastapi-limiter`).

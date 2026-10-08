@@ -1,23 +1,39 @@
 """
 Router del feature `auth`.
 
-Corresponde a `lib/features/auth/` del frontend: por ahora solo implementa
-el registro (sección 3.1 de la Especificación de Endpoints), que es lo que
-necesita `register_screen.dart` para funcionar contra un backend real.
+Corresponde a `lib/features/auth/` del frontend: implementa registro y login.
 
-Login, refresh, logout y recuperación de contraseña (3.2 a 3.6) quedan
-fuera de este primer hito y se agregan cuando se aborde ese ticket
-(equivalente a AGE-104 del Plan de Desarrollo).
+Refresh, logout y recuperación de contraseña permanecen pendientes.
 """
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limit import simple_rate_limit
-from app.features.auth.schemas import RegisterRequest, RegisterResponse
-from app.features.auth.service import register_user
+from app.features.auth.schemas import LoginRequest, LoginResponse, RegisterRequest, RegisterResponse
+from app.features.auth.service import login_user, register_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post(
+    "/login",
+    response_model=LoginResponse,
+    summary="Iniciar sesión con una cuenta registrada",
+    dependencies=[Depends(simple_rate_limit(max_requests=5, window_seconds=60))],
+)
+async def login(
+    payload: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> LoginResponse:
+    user, access_token, refresh_token = await login_user(db, payload)
+    return LoginResponse(
+        user_id=user.id,
+        email=user.email,
+        role=None,
+        access_token=access_token,
+        refresh_token=refresh_token,
+    )
 
 
 @router.post(
